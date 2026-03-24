@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coupon Admin Panel</title>
+<style>
+body{ margin:0; font-family:system-ui; background:#f1f3f6; }
+.header{ background:#111; color:white; padding:15px; text-align:center; font-size:20px; }
+.container{ padding:15px; max-width:500px; margin:auto; }
+form{ background:white; padding:15px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.08); margin-bottom:20px; }
+input, select{ width:100%; padding:8px; margin-bottom:8px; border-radius:6px; border:1px solid #ccc; }
+button{ padding:8px; border:none; border-radius:6px; cursor:pointer; }
+.add-btn{ background:#2874f0; color:white; width:100%; }
+.delete-btn{ background:#d32f2f; color:white; margin-top:5px; }
+.toggle-btn{ background:#ffa000; color:white; margin-top:5px; }
+.card{ background:white; padding:10px; border-radius:8px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+.flex{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.success{ color:green; text-align:center; }
+.error{ color:red; text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="header">Coupon Admin Panel</div>
+
+<div class="container">
+<h2>Add Coupon</h2>
+<form id="coupon-form">
+  <input type="text" id="code" placeholder="Coupon Code (Ex: SAVE10)" required>
+  <select id="discount_type">
+    <option value="percent">Percent %</option>
+    <option value="flat">Flat ₹</option>
+  </select>
+  <input type="number" id="discount_value" placeholder="Discount Value" required>
+  <input type="number" id="min_order" placeholder="Minimum Order Amount (Optional)">
+  <input type="date" id="expiry_date">
+  <button type="submit" class="add-btn">Save Coupon</button>
+</form>
+
+<p id="message"></p>
+
+<h2>All Coupons</h2>
+<div id="coupon-list"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+loadCoupons();
+
+/* ADD COUPON */
+document.getElementById("coupon-form").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const code = document.getElementById("code").value.trim().toUpperCase();
+  const discount_type = document.getElementById("discount_type").value;
+  const discount_value = Number(document.getElementById("discount_value").value);
+  const min_order = Number(document.getElementById("min_order").value) || 0;
+  const expiry_date = document.getElementById("expiry_date").value || null;
+
+  if(!code){ showMessage("Enter coupon code","error"); return; }
+
+  try{
+    // SAVE with coupon code as doc ID
+    await setDoc(doc(db,"coupons",code),{
+      code,
+      discount_type,
+      discount_value,
+      min_order,
+      expiry_date,
+      active:true,
+      createdAt:new Date()
+    });
+    showMessage("Coupon Added Successfully ✅","success");
+    e.target.reset();
+    loadCoupons();
+  } catch(err){ console.log(err); showMessage("Database Error","error"); }
+});
+
+/* LOAD COUPONS */
+async function loadCoupons(){
+  const list=document.getElementById("coupon-list");
+  list.innerHTML="Loading...";
+  try{
+    const q=query(collection(db,"coupons"), orderBy("createdAt","desc"));
+    const snapshot = await getDocs(q);
+    list.innerHTML="";
+    if(snapshot.empty){ list.innerHTML="<p>No Coupons Found</p>"; return; }
+
+    snapshot.forEach(docSnap=>{
+      const c=docSnap.data();
+      const id=docSnap.id;
+      list.innerHTML += `
+      <div class="card">
+        <div class="flex">
+          <div>
+            <p><b>${c.code}</b></p>
+            <p>Type: ${c.discount_type}</p>
+            <p>Value: ${c.discount_value}</p>
+            <p>Min Order: ₹${c.min_order}</p>
+            <p>Expiry: ${c.expiry_date || "No Expiry"}</p>
+            <p>Status: ${c.active ? "Active ✅" : "Inactive ❌"}</p>
+          </div>
+          <div>
+            <button class="toggle-btn" onclick="toggleCoupon('${id}', ${c.active})">${c.active ? "Deactivate" : "Activate"}</button>
+            <br>
+            <button class="delete-btn" onclick="deleteCoupon('${id}')">Delete</button>
+          </div>
+        </div>
+      </div>
+      `;
+    });
+  } catch(err){ console.log(err); showMessage("Failed to load coupons","error"); }
+}
+
+/* DELETE */
+window.deleteCoupon = async(id)=>{
+  if(confirm("Delete this coupon?")){
+    await deleteDoc(doc(db,"coupons",id));
+    loadCoupons();
+  }
+}
+
+/* TOGGLE */
+window.toggleCoupon = async(id,currentStatus)=>{
+  await updateDoc(doc(db,"coupons",id),{ active: !currentStatus });
+  loadCoupons();
+}
+
+/* MESSAGE */
+function showMessage(msg,type){
+  const el=document.getElementById("message");
+  el.innerText=msg;
+  el.className=type==="success"?"success":"error";
+  setTimeout(()=>{ el.innerText="" },3000);
+}
+</script>
+</body>
+</html>
