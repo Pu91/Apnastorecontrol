@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyShop Admin Panel</title>
+
+<style>
+body{margin:0;font-family:system-ui;background:#f1f3f6;}
+
+.header{
+background:#111;color:white;padding:14px;text-align:center;font-size:20px;font-weight:bold;
+}
+
+.container{padding:15px;margin:auto;max-width:900px;}
+
+form{
+background:white;padding:15px;border-radius:12px;
+box-shadow:0 4px 10px rgba(0,0,0,0.08);
+}
+
+input,select{
+width:100%;padding:10px;margin-bottom:10px;
+border-radius:8px;border:1px solid #ccc;
+}
+
+button{
+padding:10px;border:none;border-radius:8px;cursor:pointer;
+}
+
+.add-btn{background:#2874f0;color:white;width:100%;}
+
+.card{
+background:white;padding:10px;margin-top:10px;
+border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.flex{display:flex;justify-content:space-between;}
+
+img{width:70px;height:60px;border-radius:6px;}
+
+.loading{text-align:center;padding:10px;}
+</style>
+</head>
+
+<body>
+
+<div class="header">🔥 MyShop Admin Panel</div>
+
+<div class="container">
+
+<form id="product-form">
+<input type="hidden" id="product-id">
+
+<input type="text" id="name" placeholder="Product Name" required>
+<input type="number" id="price" placeholder="Price" required>
+<input type="text" id="image" placeholder="Image URL">
+<input type="number" id="quantity" placeholder="Stock Quantity" required>
+
+<select id="category">
+<option>Mobile</option>
+<option>Fashion</option>
+<option>Electronics</option>
+<option>Grocery</option>
+<option>Appliances</option>
+<option>Books</option>
+</select>
+
+<button class="add-btn">💾 Save Product</button>
+</form>
+
+<h3>Product List</h3>
+<div id="product-list"></div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { 
+  getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc 
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* LOAD PRODUCTS */
+async function loadProducts(){
+  const list = document.getElementById("product-list");
+  list.innerHTML = "<div class='loading'>Loading...</div>";
+
+  const snap = await getDocs(collection(db,"products"));
+
+  if(snap.empty){
+    list.innerHTML="<p>No Product</p>";
+    return;
+  }
+
+  list.innerHTML="";
+
+  snap.forEach(d=>{
+    let p = d.data();
+
+    list.innerHTML+=`
+    <div class="card">
+      <div class="flex">
+        <div>
+          <img src="${p.image || 'https://via.placeholder.com/80'}">
+          <p><b>${p.name}</b></p>
+          <p>₹${p.price}</p>
+          <p>${p.category}</p>
+          <p>Stock: ${p.quantity}</p>
+        </div>
+        <div>
+          <button onclick="editProduct('${d.id}')">Edit</button>
+          <button onclick="deleteProduct('${d.id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+    `;
+  });
+}
+
+/* SAVE */
+document.getElementById("product-form").addEventListener("submit", async(e)=>{
+  e.preventDefault();
+
+  const id = document.getElementById("product-id").value.trim();
+  const name = document.getElementById("name").value.trim();
+  const price = Number(document.getElementById("price").value);
+  const image = document.getElementById("image").value.trim();
+  const category = document.getElementById("category").value;
+  const quantity = Number(document.getElementById("quantity").value);
+
+  /* VALIDATION */
+  if(!name || !price || !quantity){
+    alert("❌ Fill all required fields");
+    return;
+  }
+
+  try{
+    if(id){
+      await updateDoc(doc(db,"products",id),{
+        name,price,image,category,quantity
+      });
+      alert("✅ Product Updated");
+    } else {
+      await addDoc(collection(db,"products"),{
+        name,price,image,category,quantity,
+        createdAt: new Date()
+      });
+      alert("✅ Product Added");
+    }
+
+    e.target.reset();
+    document.getElementById("product-id").value="";
+    loadProducts();
+
+  }catch(err){
+    console.error(err);
+    alert("❌ Error saving data");
+  }
+});
+
+/* EDIT */
+window.editProduct = async(id)=>{
+  const snap = await getDoc(doc(db,"products",id));
+  const p = snap.data();
+
+  document.getElementById("product-id").value=id;
+  document.getElementById("name").value=p.name;
+  document.getElementById("price").value=p.price;
+  document.getElementById("image").value=p.image;
+  document.getElementById("category").value=p.category;
+  document.getElementById("quantity").value=p.quantity;
+
+  window.scrollTo({top:0});
+};
+
+/* DELETE */
+window.deleteProduct = async(id)=>{
+  if(confirm("Delete?")){
+    await deleteDoc(doc(db,"products",id));
+    loadProducts();
+  }
+};
+
+/* INIT */
+loadProducts();
+</script>
+
+</body>
+</html>
