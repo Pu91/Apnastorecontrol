@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Order Panel</title>
+
+<style>
+body{font-family:system-ui;background:#f4f6f9;margin:0}
+.container{max-width:1200px;margin:auto;padding:20px}
+h2{margin-bottom:20px}
+
+.topbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px}
+input,select{
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #ddd;
+}
+
+.summary{display:flex;gap:15px;margin-bottom:20px;flex-wrap:wrap}
+.summary-box{
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  box-shadow:0 3px 8px rgba(0,0,0,0.08);
+  min-width:120px;
+  text-align:center;
+}
+
+.card{
+  background:white;
+  padding:15px;
+  border-radius:12px;
+  margin-bottom:15px;
+  box-shadow:0 3px 10px rgba(0,0,0,0.08);
+}
+
+.status{
+  padding:4px 10px;
+  border-radius:20px;
+  color:white;
+  font-size:12px;
+}
+
+.Pending { background:#f39c12; }
+.Accepted { background:#3498db; }
+.Rejected { background:#e74c3c; }
+.Shipped { background:#9b59b6; }
+.Delivered { background:#2ecc71; }
+.Cancelled { background:gray; }
+.Out-of-Delivery { background:#d35400; }
+
+button{
+  padding:6px 10px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:13px;
+  background:#34495e;
+  color:white;
+  margin-right:5px;
+}
+
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.5);
+  display:none;
+  justify-content:center;
+  align-items:center;
+}
+
+.modal-content{
+  background:white;
+  width:95%;
+  max-width:750px;
+  padding:20px;
+  border-radius:12px;
+  max-height:90vh;
+  overflow:auto;
+}
+
+img{
+  width:60px;
+  height:60px;
+  object-fit:cover;
+  border-radius:6px;
+}
+
+.product-item{
+  display:flex;
+  gap:10px;
+  margin-bottom:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<h2>Admin Order Management (Firebase)</h2>
+
+<div class="topbar">
+  <input type="text" id="searchInput" placeholder="Search ID / Name / Phone">
+  <select id="statusFilter">
+    <option value="">All Status</option>
+    <option>Pending</option>
+    <option>Accepted</option>
+    <option>Shipped</option>
+    <option>Out of Delivery</option>
+    <option>Delivered</option>
+    <option>Cancelled</option>
+  </select>
+  <button onclick="loadOrders()">Filter</button>
+</div>
+
+<div class="summary">
+  <div class="summary-box"><b>Total Orders</b><div id="totalOrders">0</div></div>
+  <div class="summary-box"><b>Total Sales</b><div id="totalSales">₹0</div></div>
+  <div class="summary-box"><b>Pending</b><div id="totalPending">0</div></div>
+  <div class="summary-box"><b>Accepted</b><div id="totalAccepted">0</div></div>
+  <div class="summary-box"><b>Shipped</b><div id="totalShipped">0</div></div>
+  <div class="summary-box"><b>Out</b><div id="totalOut">0</div></div>
+  <div class="summary-box"><b>Delivered</b><div id="totalDelivered">0</div></div>
+</div>
+
+<div id="orders"></div>
+</div>
+
+<div class="modal" id="orderModal">
+  <div class="modal-content" id="modalContent"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import {
+  getFirestore, collection, getDocs,
+  doc, getDoc, updateDoc
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const ordersDiv = document.getElementById("orders");
+
+/* LOAD ORDERS */
+window.loadOrders = async function(){
+
+  const snap = await getDocs(collection(db,"orders"));
+
+  let data = [];
+  snap.forEach(doc=>{
+    data.push({id:doc.id,...doc.data()});
+  });
+
+  let search = document.getElementById("searchInput").value.toLowerCase();
+  let statusFilter = document.getElementById("statusFilter").value;
+
+  let filtered = data.filter(o=>{
+    let matchSearch =
+      o.id.toString().includes(search) ||
+      (o.customer_name||"").toLowerCase().includes(search) ||
+      (o.customer_phone||"").includes(search);
+
+    let matchStatus = statusFilter ? o.status === statusFilter : true;
+
+    return matchSearch && matchStatus;
+  });
+
+  ordersDiv.innerHTML="";
+
+  let sales=0,pending=0,accepted=0,shipped=0,out=0,delivered=0;
+
+  filtered.forEach(o=>{
+    sales += o.total_amount || 0;
+
+    switch(o.status){
+      case "Pending": pending++; break;
+      case "Accepted": accepted++; break;
+      case "Shipped": shipped++; break;
+      case "Out of Delivery": out++; break;
+      case "Delivered": delivered++; break;
+    }
+
+    ordersDiv.innerHTML += `
+      <div class="card">
+        <b>Order #${o.id}</b><br>
+        ${o.customer_name}<br>
+        ₹${o.total_amount}<br><br>
+        Status: <span class="status">${o.status}</span><br><br>
+        <button onclick="viewOrder('${o.id}')">View</button>
+      </div>
+    `;
+  });
+
+  document.getElementById("totalOrders").innerText=filtered.length;
+  document.getElementById("totalSales").innerText="₹"+sales;
+  document.getElementById("totalPending").innerText=pending;
+  document.getElementById("totalAccepted").innerText=accepted;
+  document.getElementById("totalShipped").innerText=shipped;
+  document.getElementById("totalOut").innerText=out;
+  document.getElementById("totalDelivered").innerText=delivered;
+}
+
+/* VIEW ORDER */
+window.viewOrder = async function(id){
+
+  const orderSnap = await getDoc(doc(db,"orders",id));
+  const order = orderSnap.data();
+
+  const itemSnap = await getDocs(collection(db,"orders",id,"items"));
+
+  let html = `<h3>Order #${id}</h3>`;
+  html += `<p>${order.customer_name}</p>`;
+  html += `<p>${order.customer_phone}</p>`;
+  html += `<hr><h4>Items</h4>`;
+
+  let subtotal=0;
+
+  itemSnap.forEach(d=>{
+    const item=d.data();
+    subtotal+=item.subtotal;
+
+    html+=`
+      <div class="product-item">
+        <img src="${item.image}">
+        <div>${item.name}<br>₹${item.price} x ${item.quantity}</div>
+      </div>
+    `;
+  });
+
+  html+=`
+    <hr>
+    <h3>Total: ₹${subtotal}</h3>
+
+    <select onchange="updateStatus('${id}',this.value)">
+      <option ${order.status==='Pending'?'selected':''}>Pending</option>
+      <option ${order.status==='Accepted'?'selected':''}>Accepted</option>
+      <option ${order.status==='Shipped'?'selected':''}>Shipped</option>
+      <option ${order.status==='Out of Delivery'?'selected':''}>Out of Delivery</option>
+      <option ${order.status==='Delivered'?'selected':''}>Delivered</option>
+      <option ${order.status==='Cancelled'?'selected':''}>Cancelled</option>
+    </select>
+    <br><br>
+    <button onclick="closeModal()">Close</button>
+  `;
+
+  document.getElementById("modalContent").innerHTML=html;
+  document.getElementById("orderModal").style.display="flex";
+}
+
+window.updateStatus = async function(id,status){
+  await updateDoc(doc(db,"orders",id),{status});
+  alert("Updated");
+  closeModal();
+  loadOrders();
+}
+
+window.closeModal = function(){
+  document.getElementById("orderModal").style.display="none";
+}
+
+loadOrders();
+</script>
+
+</body>
+</html>
