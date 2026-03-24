@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Contacts</title>
+
+<style>
+body{
+  font-family:system-ui;
+  background:#f4f6f9;
+  margin:0;
+}
+
+.header{
+  background:#2874f0;
+  color:white;
+  padding:12px;
+  text-align:center;
+  font-weight:bold;
+}
+
+.container{
+  max-width:900px;
+  margin:20px auto;
+  padding:10px;
+}
+
+.card{
+  background:white;
+  padding:15px;
+  margin-bottom:10px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+.name{font-weight:bold;}
+.phone{color:#555; font-size:13px;}
+.problem{margin:8px 0;}
+
+.status{
+  font-size:12px;
+  padding:4px 8px;
+  border-radius:6px;
+}
+
+.pending{background:#ffe0b2;color:#e65100;}
+.solved{background:#c8e6c9;color:#2e7d32;}
+
+button{
+  margin-top:8px;
+  margin-right:5px;
+  padding:6px 10px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.solve{background:#4caf50;color:white;}
+.delete{background:#e53935;color:white;}
+</style>
+</head>
+
+<body>
+
+<div class="header">Admin Contact Panel (No Login)</div>
+
+<div class="container" id="list">Loading...</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import {
+  getFirestore, collection,
+  doc, updateDoc, deleteDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* LOAD CONTACTS REALTIME */
+function loadContacts(){
+  const container = document.getElementById("list");
+
+  onSnapshot(collection(db,"contacts"),(snap)=>{
+    container.innerHTML="";
+
+    if(snap.empty){
+      container.innerHTML="No data found";
+      return;
+    }
+
+    snap.forEach(docSnap=>{
+      const d = docSnap.data();
+      const id = docSnap.id;
+
+      container.innerHTML+=`
+        <div class="card">
+          <div class="name">${d.name}</div>
+          <div class="phone">${d.phone}</div>
+          <div class="problem">${d.problem}</div>
+
+          <div class="status ${d.status}">
+            ${d.status}
+          </div>
+
+          <div>
+            <button class="solve" onclick="markSolved('${id}')">
+              Mark Solved
+            </button>
+
+            <button class="delete" onclick="deleteMsg('${id}')">
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+    });
+  });
+}
+
+/* MARK SOLVED */
+window.markSolved = async (id)=>{
+  await updateDoc(doc(db,"contacts",id),{
+    status:"solved"
+  });
+};
+
+/* DELETE */
+window.deleteMsg = async (id)=>{
+  if(confirm("Delete this message?")){
+    await deleteDoc(doc(db,"contacts",id));
+  }
+};
+
+/* INIT */
+loadContacts();
+</script>
+
+</body>
+</html>
