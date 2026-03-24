@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Users</title>
+<style>
+body{font-family:sans-serif;background:#f4f6f9;padding:20px}
+.card{
+  background:white;
+  padding:12px;
+  margin-bottom:10px;
+  border-radius:8px;
+}
+</style>
+</head>
+<body>
+
+<h2>👤 All Users</h2>
+<div id="list">Loading...</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* Firebase */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* 🔥 REALTIME USER LIST */
+onSnapshot(collection(db,"users"),(snap)=>{
+  const list=document.getElementById("list");
+  list.innerHTML="";
+
+  snap.forEach(doc=>{
+    let u=doc.data();
+
+    list.innerHTML += `
+      <div class="card">
+        <b>Email:</b> ${u.email}<br>
+        <b>UID:</b> ${u.uid}
+      </div>
+    `;
+  });
+});
+</script>
+
+</body>
+</html>
