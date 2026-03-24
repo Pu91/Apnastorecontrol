@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Order Panel</title>
+
+<style>
+body{font-family:system-ui;background:#f4f6f9;margin:0}
+.container{max-width:1200px;margin:auto;padding:20px}
+
+.topbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+input,select{padding:8px;border-radius:6px;border:1px solid #ddd}
+
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+.summary-box{background:white;padding:10px;border-radius:8px;min-width:110px;text-align:center}
+
+.card{
+  background:white;padding:15px;border-radius:10px;
+  margin-bottom:10px;box-shadow:0 2px 6px rgba(0,0,0,0.08)
+}
+
+.status{padding:4px 10px;border-radius:20px;color:white;font-size:12px}
+.Pending{background:#f39c12}
+.Accepted{background:#3498db}
+.Shipped{background:#9b59b6}
+.Delivered{background:#2ecc71}
+.Cancelled{background:gray}
+.Out-of-Delivery{background:#d35400}
+
+button{
+  padding:6px 10px;border:none;border-radius:6px;
+  background:#34495e;color:white;cursor:pointer
+}
+
+.modal{
+  position:fixed;inset:0;background:rgba(0,0,0,0.5);
+  display:none;justify-content:center;align-items:center;
+}
+
+.modal-content{
+  background:white;width:95%;max-width:750px;
+  padding:20px;border-radius:10px;
+  max-height:90vh;overflow:auto;
+}
+
+.product-item{display:flex;gap:10px;margin-bottom:10px}
+.product-item img{width:60px;height:60px;border-radius:6px}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Admin Orders</h2>
+
+<div class="topbar">
+  <input type="text" id="searchInput" placeholder="Search ID / Name / Phone">
+  <select id="statusFilter">
+    <option value="">All Status</option>
+    <option>Pending</option>
+    <option>Accepted</option>
+    <option>Shipped</option>
+    <option>Out of Delivery</option>
+    <option>Delivered</option>
+    <option>Cancelled</option>
+  </select>
+</div>
+
+<div class="summary">
+  <div class="summary-box">Orders<br><b id="totalOrders">0</b></div>
+  <div class="summary-box">Sales<br><b id="totalSales">₹0</b></div>
+</div>
+
+<div id="orders"></div>
+
+</div>
+
+<div class="modal" id="orderModal">
+  <div class="modal-content" id="modalContent"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import {
+  getFirestore, collection, getDocs,
+  doc, getDoc, updateDoc,
+  query, where
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* FIREBASE */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const ordersDiv = document.getElementById("orders");
+const searchInput = document.getElementById("searchInput");
+const statusFilter = document.getElementById("statusFilter");
+
+function statusClass(s){ return (s||"").replace(/ /g,'-') }
+
+/* LOAD ORDERS */
+async function loadOrders(){
+
+  const snap = await getDocs(collection(db,"orders"));
+  let data=[];
+  snap.forEach(d=>data.push({id:d.id,...d.data()}));
+
+  data.sort((a,b)=> (b.created_at || 0) - (a.created_at || 0));
+
+  let search = searchInput.value.toLowerCase();
+
+  let filtered = data.filter(o=>{
+    return (
+      String(o.id).includes(search) ||
+      (o.customer_name||"").toLowerCase().includes(search) ||
+      (o.customer_phone||"").includes(search)
+    ) && (statusFilter.value ? o.status===statusFilter.value : true);
+  });
+
+  ordersDiv.innerHTML="";
+  let sales=0;
+
+  filtered.forEach(o=>{
+    sales+=Number(o.total_amount||0);
+
+    ordersDiv.innerHTML+=`
+      <div class="card">
+        <b>#${o.id}</b><br>
+        ${o.customer_name}<br>
+        ₹${o.total_amount}<br>
+        <span class="status ${statusClass(o.status)}">${o.status}</span><br><br>
+        <button onclick="viewOrder('${o.id}')">View</button>
+      </div>
+    `;
+  });
+
+  document.getElementById("totalOrders").innerText=filtered.length;
+  document.getElementById("totalSales").innerText="₹"+sales;
+}
+
+/* VIEW ORDER */
+window.viewOrder = async function(orderId){
+
+  const orderSnap = await getDoc(doc(db,"orders",orderId));
+  const order = orderSnap.data();
+
+  const q = query(collection(db,"order_items"),where("order_id","==",orderId));
+  const itemSnap = await getDocs(q);
+
+  const all = await getDocs(collection(db,"orders"));
+  let count=0;
+  all.forEach(d=>{
+    if(d.data().customer_phone===order.customer_phone) count++;
+  });
+
+  let subtotal=0;
+  let html=`
+    <h3>Order #${orderId}</h3>
+    <p><b>Name:</b> ${order.customer_name}</p>
+    <p><b>Phone:</b> ${order.customer_phone}</p>
+    <p><b>Total Orders:</b> ${count}</p>
+    <p><b>Address:</b> ${order.address}, ${order.city}, ${order.state} - ${order.pin_code}</p>
+    <p><b>Payment:</b> ${order.payment_method}</p>
+    <hr><h4>Items</h4>
+  `;
+
+  itemSnap.forEach(d=>{
+    let i=d.data();
+    let total=i.price*i.quantity;
+    subtotal+=total;
+
+    html+=`
+      <div class="product-item">
+        <img src="${i.image||''}">
+        <div>
+          <b>${i.product_name}</b><br>
+          ₹${i.price} × ${i.quantity} = ₹${total}
+        </div>
+      </div>
+    `;
+  });
+
+  let discount=Number(order.discount_amount||0);
+  let grand=subtotal-discount;
+  if(grand<0) grand=0;
+
+  html+=`
+    <hr>
+    <p>Subtotal: ₹${subtotal}</p>
+    <p>Discount: ₹${discount}</p>
+    <h3>Total: ₹${grand}</h3>
+
+    <button onclick="printInvoice()">Print Invoice</button>
+    <button onclick="exportCSV('${orderId}')">Export CSV</button>
+
+    <br><br>
+    <select onchange="updateStatus('${orderId}',this.value)">
+      <option ${order.status==='Pending'?'selected':''}>Pending</option>
+      <option ${order.status==='Accepted'?'selected':''}>Accepted</option>
+      <option ${order.status==='Shipped'?'selected':''}>Shipped</option>
+      <option ${order.status==='Out of Delivery'?'selected':''}>Out of Delivery</option>
+      <option ${order.status==='Delivered'?'selected':''}>Delivered</option>
+      <option ${order.status==='Cancelled'?'selected':''}>Cancelled</option>
+    </select>
+
+    <br><br>
+    <textarea id="msg" style="width:100%;height:80px">${order.message||""}</textarea>
+    <br>
+    <button onclick="saveNote('${orderId}')">Save Note</button>
+    <button onclick="closeModal()">Close</button>
+  `;
+
+  modalContent.innerHTML=html;
+  orderModal.style.display="flex";
+}
+
+/* PRINT */
+window.printInvoice=function(){
+  let w=window.open("","","width=800,height=700");
+  w.document.write("<h2>Invoice</h2>"+modalContent.innerHTML);
+  w.print();
+}
+
+/* CSV */
+window.exportCSV=async function(orderId){
+  const q=query(collection(db,"order_items"),where("order_id","==",orderId));
+  const snap=await getDocs(q);
+
+  let csv="Product,Price,Qty,Total\n";
+
+  snap.forEach(d=>{
+    let i=d.data();
+    csv+=`${i.product_name},${i.price},${i.quantity},${i.price*i.quantity}\n`;
+  });
+
+  let blob=new Blob([csv]);
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="order.csv";
+  a.click();
+}
+
+/* UPDATE */
+window.updateStatus=async(id,status)=>{
+  await updateDoc(doc(db,"orders",id),{status});
+  loadOrders();
+}
+
+/* SAVE NOTE */
+window.saveNote=async(id)=>{
+  let msg=document.getElementById("msg").value;
+  await updateDoc(doc(db,"orders",id),{message:msg});
+  alert("Saved");
+}
+
+window.closeModal=()=>orderModal.style.display="none";
+
+/* SEARCH */
+searchInput.addEventListener("input",loadOrders);
+statusFilter.addEventListener("change",loadOrders);
+
+loadOrders();
+</script>
+
+</body>
+</html>
