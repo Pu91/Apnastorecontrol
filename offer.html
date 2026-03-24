@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Manage Offers</title>
+
+<style>
+body{font-family:system-ui;background:#f4f6f9;margin:0;padding:20px;}
+h2{margin-bottom:15px;}
+form{margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;}
+form input[type=text]{flex:1;padding:8px;border-radius:6px;border:1px solid #ccc;}
+form label{display:flex;align-items:center;gap:6px;}
+form button{padding:8px 16px;background:#2874f0;color:white;border:none;border-radius:6px;cursor:pointer;}
+table{width:100%;border-collapse:collapse;background:white;border-radius:6px;overflow:hidden;}
+th,td{padding:10px;text-align:left;border-bottom:1px solid #eee;}
+th{background:#f4f6f9;}
+button.action{padding:4px 8px;margin-right:4px;border:none;border-radius:4px;cursor:pointer;}
+button.activate{background:#388e3c;color:white;}
+button.deactivate{background:#f57c00;color:white;}
+button.delete{background:#e53935;color:white;}
+</style>
+</head>
+
+<body>
+
+<h2>Manage Offers</h2>
+
+<form id="offerForm">
+  <input type="text" id="offerTitle" placeholder="Offer text" required>
+  <label>
+    Active?
+    <input type="checkbox" id="offerActive">
+  </label>
+  <button type="submit">Add Offer</button>
+</form>
+
+<table id="offersTable">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Title</th>
+      <th>Active</th>
+      <th>Created At</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td colspan="5" style="text-align:center;">Loading...</td></tr>
+  </tbody>
+</table>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, getDocs,
+  updateDoc, deleteDoc, doc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* LOAD OFFERS */
+async function loadOffers(){
+  const snap = await getDocs(collection(db,"offers"));
+  const tbody = document.querySelector('#offersTable tbody');
+
+  let data=[];
+  snap.forEach(d=>data.push({id:d.id,...d.data()}));
+
+  if(data.length===0){
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No offers found</td></tr>`;
+    return;
+  }
+
+  // sort newest first
+  data.sort((a,b)=> (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
+
+  tbody.innerHTML = "";
+
+  data.forEach(offer=>{
+    const date = offer.created_at?.seconds
+      ? new Date(offer.created_at.seconds*1000).toLocaleString()
+      : "—";
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${offer.id}</td>
+        <td>${offer.title}</td>
+        <td>${offer.active ? '✅' : '❌'}</td>
+        <td>${date}</td>
+        <td>
+          ${offer.active 
+            ? `<button class="action deactivate" onclick="toggleActive('${offer.id}', false)">Deactivate</button>` 
+            : `<button class="action activate" onclick="toggleActive('${offer.id}', true)">Activate</button>`}
+          <button class="action delete" onclick="deleteOffer('${offer.id}')">Delete</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+/* ADD OFFER */
+document.getElementById('offerForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+
+  const title = document.getElementById('offerTitle').value;
+  const active = document.getElementById('offerActive').checked;
+
+  if(active){
+    const snap = await getDocs(collection(db,"offers"));
+    snap.forEach(async d=>{
+      await updateDoc(doc(db,"offers",d.id),{active:false});
+    });
+  }
+
+  await addDoc(collection(db,"offers"),{
+    title,
+    active,
+    created_at: serverTimestamp()
+  });
+
+  alert("Offer added!");
+  document.getElementById('offerForm').reset();
+  loadOffers();
+});
+
+/* TOGGLE ACTIVE */
+window.toggleActive = async (id, makeActive)=>{
+  if(makeActive){
+    const snap = await getDocs(collection(db,"offers"));
+    snap.forEach(async d=>{
+      await updateDoc(doc(db,"offers",d.id),{active:false});
+    });
+  }
+
+  await updateDoc(doc(db,"offers",id),{active:makeActive});
+  loadOffers();
+}
+
+/* DELETE */
+window.deleteOffer = async (id)=>{
+  if(confirm("Delete this offer?")){
+    await deleteDoc(doc(db,"offers",id));
+    loadOffers();
+  }
+}
+
+/* INIT */
+loadOffers();
+</script>
+
+</body>
+</html>
