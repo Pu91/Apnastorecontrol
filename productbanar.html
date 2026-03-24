@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel - MyShop</title>
+
+<style>
+body{margin:0;font-family:system-ui;background:#f1f3f6;}
+.header{background:#111;color:white;padding:12px;text-align:center;font-size:18px;}
+.container{padding:15px;margin-bottom:80px;}
+h2{margin-top:25px;}
+
+form{
+  background:white;padding:15px;border-radius:10px;margin-bottom:20px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+input,select{
+  width:100%;padding:8px;margin-bottom:8px;border-radius:6px;border:1px solid #ccc;
+}
+
+button{padding:8px;border:none;border-radius:6px;cursor:pointer;}
+.add-btn{background:#2874f0;color:white;width:100%;}
+.edit-btn{background:#ffa000;color:white;}
+.delete-btn{background:#d32f2f;color:white;}
+
+.card{
+  background:white;padding:10px;border-radius:8px;margin-bottom:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.card img{width:80px;height:60px;object-fit:cover;border-radius:6px;}
+.flex{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.error{color:red;text-align:center;}
+</style>
+</head>
+
+<body>
+
+<div class="header">MyShop Admin Panel</div>
+
+<div class="container">
+
+<h2>Add Product</h2>
+<form id="product-form">
+  <input type="hidden" id="product-id">
+  <input type="text" id="name" placeholder="Product Name" required>
+  <input type="number" id="price" placeholder="Price" required>
+  <input type="text" id="images" placeholder="Image URLs (comma separated)" required>
+  <input type="number" id="quantity" placeholder="Stock Quantity" required>
+  <input type="text" id="description" placeholder="Product Description">
+  <select id="category">
+    <option>tranding</option>
+    <option>Fashion</option>
+    <option>Electronics</option>
+    <option>koria</option>
+    <option>jersey sports</option>
+    <option>Books</option>
+  </select>
+  <button type="submit" class="add-btn">Save Product</button>
+</form>
+
+<h2>Product List</h2>
+<div id="product-list"></div>
+
+<h2>Add Banner</h2>
+<form id="banner-form">
+  <input type="hidden" id="banner-id">
+  <input type="text" id="banner-image" placeholder="Banner Image URL" required>
+  <input type="text" id="banner-link" placeholder="Banner Link">
+  <button type="submit" class="add-btn">Save Banner</button>
+</form>
+
+<h2>Banner List</h2>
+<div id="banner-list"></div>
+
+<p id="error" class="error"></p>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* ================= PRODUCTS ================= */
+
+async function loadProducts(){
+  const snapshot = await getDocs(collection(db,"products"));
+  const list = document.getElementById("product-list");
+  list.innerHTML = "";
+
+  snapshot.forEach(docSnap=>{
+    const p = docSnap.data();
+    const id = docSnap.id;
+    const firstImage = p.images?.[0] || "https://via.placeholder.com/80";
+
+    list.innerHTML += `
+    <div class="card">
+      <div class="flex">
+        <div>
+          <img src="${firstImage}">
+          <p><b>${p.name}</b></p>
+          <p>₹${p.price}</p>
+          <p>${p.category}</p>
+          <p>${p.description || ''}</p>
+        </div>
+        <div>
+          <button class="edit-btn" onclick='editProduct("${id}", ${JSON.stringify(p)})'>Edit</button>
+          <button class="delete-btn" onclick="deleteProduct('${id}')">Delete</button>
+        </div>
+      </div>
+    </div>`;
+  });
+}
+
+document.getElementById("product-form")
+.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+
+  const id = document.getElementById("product-id").value;
+  const name = document.getElementById("name").value;
+  const price = Number(document.getElementById("price").value);
+  const images = document.getElementById("images").value.split(",").map(i=>i.trim());
+  const quantity = Number(document.getElementById("quantity").value);
+  const category = document.getElementById("category").value;
+  const description = document.getElementById("description").value;
+
+  if(id){
+    await updateDoc(doc(db,"products",id),{name,price,images,quantity,category,description});
+  }else{
+    await addDoc(collection(db,"products"),{name,price,images,quantity,category,description});
+  }
+
+  e.target.reset();
+  document.getElementById("product-id").value="";
+  loadProducts();
+});
+
+window.editProduct = (id,product)=>{
+  document.getElementById("product-id").value=id;
+  document.getElementById("name").value=product.name;
+  document.getElementById("price").value=product.price;
+  document.getElementById("images").value=product.images?.join(", ");
+  document.getElementById("quantity").value=product.quantity;
+  document.getElementById("category").value=product.category;
+  document.getElementById("description").value=product.description;
+};
+
+window.deleteProduct = async(id)=>{
+  if(confirm("Delete product?")){
+    await deleteDoc(doc(db,"products",id));
+    loadProducts();
+  }
+};
+
+/* ================= BANNERS ================= */
+
+async function loadBanners(){
+  const snapshot = await getDocs(collection(db,"banners"));
+  const list = document.getElementById("banner-list");
+  list.innerHTML = "";
+
+  snapshot.forEach(docSnap=>{
+    const b = docSnap.data();
+    const id = docSnap.id;
+
+    list.innerHTML += `
+    <div class="card flex">
+      <img src="${b.image}" style="width:100px;height:60px;">
+      <div>
+        <button class="edit-btn" onclick='editBanner("${id}", ${JSON.stringify(b)})'>Edit</button>
+        <button class="delete-btn" onclick="deleteBanner('${id}')">Delete</button>
+      </div>
+    </div>`;
+  });
+}
+
+document.getElementById("banner-form")
+.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+
+  const id = document.getElementById("banner-id").value;
+  const image = document.getElementById("banner-image").value;
+  const link = document.getElementById("banner-link").value;
+
+  if(id){
+    await updateDoc(doc(db,"banners",id),{image,link});
+  }else{
+    await addDoc(collection(db,"banners"),{image,link,active:true});
+  }
+
+  e.target.reset();
+  document.getElementById("banner-id").value="";
+  loadBanners();
+});
+
+window.editBanner = (id,banner)=>{
+  document.getElementById("banner-id").value=id;
+  document.getElementById("banner-image").value=banner.image;
+  document.getElementById("banner-link").value=banner.link;
+};
+
+window.deleteBanner = async(id)=>{
+  if(confirm("Delete banner?")){
+    await deleteDoc(doc(db,"banners",id));
+    loadBanners();
+  }
+};
+
+/* INIT LOAD */
+loadProducts();
+loadBanners();
+</script>
+
+</body>
+</html>
